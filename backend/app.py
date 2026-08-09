@@ -32,30 +32,18 @@ if st.session_state.user is None:
     with tab2:
         email_su = st.text_input("Email", key="signup_email")
         password_su = st.text_input("Password", type="password", key="signup_pw")
-        
+
         if st.button("Sign Up"):
             try:
-                supabase.auth.sign_up({"email": email_su, "password": password_su})
-                st.session_state.pending_email = email_su
-                st.session_state.pending_password = password_su
-                st.success("Check your email for a 6-digit code.")
+                res = supabase.auth.sign_up(
+                    {"email": email_su, "password": password_su}
+                )
+                if res.user is not None:
+                    st.success("Account created. You can log in now.")
+                else:
+                    st.warning("Signup returned no user — check Supabase logs.")
             except Exception as e:
                 st.error(f"Signup failed: {e}")
-
-        if "pending_email" in st.session_state:
-            code = st.text_input("Enter 6-digit code", key="otp_code")
-            if st.button("Verify"):
-                try:
-                    res = supabase.auth.verify_otp({
-                        "email": st.session_state.pending_email,
-                        "token": code,
-                        "type": "email"
-                    })
-                    st.session_state.user = res.user
-                    del st.session_state.pending_email
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Verification failed: {e}")
 else:
     st.write(f"Logged in as {st.session_state.user.email}")
     if st.button("Log Out"):
