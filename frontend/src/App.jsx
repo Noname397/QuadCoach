@@ -1,28 +1,71 @@
-import { useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
-import Auth from './Auth.jsx'
+import { useEffect, useState } from "react";
+import Auth from "./Auth.jsx";
+import Dashboard from "./Dashboard.jsx";
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function App() {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    const savedUser = localStorage.getItem("quadcoach-user");
+    if (savedUser) {
+      const parsedUser = JSON.parse(savedUser);
+      if (parsedUser.access_token) {
+        fetch(`${API_URL}/api/me`, {
+          headers: {
+            Authorization: `Bearer ${parsedUser.access_token}`,
+          },
+        })
+          .then(async (response) => {
+            if (!response.ok) {
+              throw new Error("Invalid session");
+            }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
+            const data = await response.json();
+            setUser({ ...parsedUser, ...data.user });
+            localStorage.setItem(
+              "quadcoach-user",
+              JSON.stringify({ ...parsedUser, ...data.user }),
+            );
+          })
+          .catch(() => {
+            localStorage.removeItem("quadcoach-user");
+            setUser(null);
+          })
+          .finally(() => setLoading(false));
+        return;
+      }
+    }
 
-    return () => listener.subscription.unsubscribe()
-  }, [])
+    setLoading(false);
+  }, []);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    localStorage.setItem("quadcoach-user", JSON.stringify(userData));
+  };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-  }
+    try {
+      const token = localStorage.getItem("quadcoach-user");
+      if (token) {
+        const parsed = JSON.parse(token);
+        await fetch(`${API_URL}/api/logout`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${parsed.access_token || ""}`,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      setUser(null);
+      localStorage.removeItem("quadcoach-user");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -34,21 +77,11 @@ export default function App() {
         {loading ? (
           <p className="text-center text-gray-500">Loading…</p>
         ) : user ? (
-          <div className="mx-auto max-w-sm rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">
-            <p className="mb-4 text-gray-700">
-              Logged in as <span className="font-medium">{user.email}</span>
-            </p>
-            <button
-              onClick={handleLogout}
-              className="rounded-md bg-gray-800 px-3 py-2 text-sm font-medium text-white hover:bg-gray-900"
-            >
-              Log Out
-            </button>
-          </div>
+          <Dashboard user={user} onLogout={handleLogout} />
         ) : (
-          <Auth onLogin={setUser} />
+          <Auth onLogin={handleLogin} />
         )}
       </main>
     </div>
-  )
+  );
 }

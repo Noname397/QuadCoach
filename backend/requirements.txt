@@ -1,4 +1,5 @@
-streamlit
 supabase
 cryptography
 python-dotenv
+Flask
+flask-cors

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { supabase } from './supabaseClient'
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
 export default function Auth({ onLogin }) {
   const [tab, setTab] = useState('login')
@@ -12,12 +13,28 @@ export default function Auth({ onLogin }) {
     e.preventDefault()
     setLoading(true)
     setMessage(null)
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (error) {
-      setMessage({ type: 'error', text: `Login failed: ${error.message}` })
-    } else {
-      onLogin(data.user)
+
+    try {
+      const response = await fetch(`${API_URL}/api/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Login failed");
+      }
+
+      onLogin({
+        ...data.user,
+        access_token: data.session?.access_token,
+      });
+    } catch (error) {
+      setMessage({ type: "error", text: `Login failed: ${error.message}` });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -25,14 +42,35 @@ export default function Auth({ onLogin }) {
     e.preventDefault()
     setLoading(true)
     setMessage(null)
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    setLoading(false)
-    if (error) {
-      setMessage({ type: 'error', text: `Signup failed: ${error.message}` })
-    } else if (data.user) {
-      setMessage({ type: 'success', text: 'Account created. You can log in now.' })
-    } else {
-      setMessage({ type: 'warning', text: 'Signup returned no user — check Supabase logs.' })
+
+    try {
+      const response = await fetch(`${API_URL}/api/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Signup failed");
+      }
+
+      if (data.user) {
+        setMessage({
+          type: "success",
+          text: "Account created. You can log in now.",
+        });
+      } else {
+        setMessage({
+          type: "warning",
+          text: "Signup returned no user — check Supabase logs.",
+        });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: `Signup failed: ${error.message}` });
+    } finally {
+      setLoading(false);
     }
   }
 
