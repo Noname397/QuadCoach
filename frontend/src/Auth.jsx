@@ -32,7 +32,10 @@ export default function Auth({ onLogin }) {
         access_token: data.session?.access_token,
       });
     } catch (error) {
-      setMessage({ type: "error", text: `Login failed: ${error.message}` });
+      const message = /verify|confirmed|confirm/i.test(error.message)
+        ? 'Please verify your email before logging in. Check the email you used to sign up.'
+        : `Login failed: ${error.message}`;
+      setMessage({ type: "error", text: message });
     } finally {
       setLoading(false);
     }
@@ -54,6 +57,15 @@ export default function Auth({ onLogin }) {
 
       if (!response.ok) {
         throw new Error(data.error || "Signup failed");
+      }
+
+      if (data.requires_confirmation) {
+        setMessage({
+          type: "success",
+          text: "Account created. Check your email to verify your account before logging in.",
+        });
+        setTab('login');
+        return;
       }
 
       if (data.user) {
