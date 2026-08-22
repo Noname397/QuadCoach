@@ -65,10 +65,10 @@ def signup():
             "password": password,
         }
         # Always pass AUTH_VERIFY_URL as the email redirect target so Supabase redirects to
-                # our backend verify handler. Keep FRONTEND_URL for the final client redirect after
-                # the backend sets cookies.
-                if AUTH_VERIFY_URL:
-                    payload_for_signup["options"] = {"email_redirect_to": AUTH_VERIFY_URL}
+        # our backend verify handler. Keep FRONTEND_URL for the final client redirect after
+        # the backend sets cookies.
+        if AUTH_VERIFY_URL:
+            payload_for_signup["options"] = {"email_redirect_to": AUTH_VERIFY_URL}
 
         response = supabase.auth.sign_up(payload_for_signup)
         user = getattr(response, "user", None)
