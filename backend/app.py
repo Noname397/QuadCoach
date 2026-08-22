@@ -12,6 +12,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError(
@@ -19,6 +20,16 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     )
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
+def serialize_user(user):
+    if not user:
+        return None
+    return {
+        "id": getattr(user, "id", None),
+        "email": getattr(user, "email", None),
+        "email_confirmed_at": getattr(user, "email_confirmed_at", None),
+    }
 
 
 @app.get("/api/health")
@@ -36,17 +47,30 @@ def signup():
         return jsonify({"error": "Email and password are required."}), 400
 
     try:
-        response = supabase.auth.sign_up({"email": email, "password": password})
+        payload_for_signup = {
+            "email": email,
+            "password": password,
+        }
+        if FRONTEND_URL:
+            payload_for_signup["options"] = {"email_redirect_to": FRONTEND_URL}
+
+        response = supabase.auth.sign_up(payload_for_signup)
         user = getattr(response, "user", None)
+        email_confirmed_at = getattr(user, "email_confirmed_at", None)
+
+        if user and not email_confirmed_at:
+            return jsonify(
+                {
+                    "user": serialize_user(user),
+                    "requires_confirmation": True,
+                    "message": "Account created. Check your email to verify your account before logging in.",
+                }
+            )
 
         return jsonify(
             {
-                "user": {
-                    "id": getattr(user, "id", None),
-                    "email": getattr(user, "email", None),
-                }
-                if user
-                else None,
+                "user": serialize_user(user),
+                "requires_confirmation": False,
                 "message": "Account created. You can log in now.",
             }
         )
@@ -70,14 +94,17 @@ def login():
         user = getattr(response, "user", None)
         session = getattr(response, "session", None)
 
+        if user and not getattr(user, "email_confirmed_at", None):
+            return jsonify(
+                {
+                    "error": "Please verify your email before logging in.",
+                    "requires_confirmation": True,
+                }
+            ), 403
+
         return jsonify(
             {
-                "user": {
-                    "id": getattr(user, "id", None),
-                    "email": getattr(user, "email", None),
-                }
-                if user
-                else None,
+                "user": serialize_user(user),
                 "session": {
                     "access_token": getattr(session, "access_token", None),
                 }
@@ -86,7 +113,16 @@ def login():
             }
         )
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 401
+        message = str(exc)
+        lower_message = message.lower()
+        if "email not confirmed" in lower_message or "verify your email" in lower_message:
+            return jsonify(
+                {
+                    "error": "Please verify your email before logging in.",
+                    "requires_confirmation": True,
+                }
+            ), 403
+        return jsonify({"error": message}), 401
 
 
 @app.get("/api/me")
@@ -103,14 +139,7 @@ def me():
         if not user:
             return jsonify({"error": "Invalid session."}), 401
 
-        return jsonify(
-            {
-                "user": {
-                    "id": getattr(user, "id", None),
-                    "email": getattr(user, "email", None),
-                }
-            }
-        )
+        return jsonify({"user": serialize_user(user)})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 401
 
