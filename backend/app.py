@@ -1,18 +1,31 @@
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template_string, make_response
 from flask_cors import CORS
 from supabase import create_client
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# CORS will be initialized after loading FRONTEND_URL so we can allow credentials
+# from the specific frontend origin rather than using a permissive '*'.
+# (See below where AUTH_VERIFY_URL and FRONTEND_URL are read from env.)
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# URL Supabase should redirect to after email verification. This should be a backend route
+# that reads the fragment and posts tokens to the server (e.g. http://localhost:5000/auth/verify).
+AUTH_VERIFY_URL = os.getenv("AUTH_VERIFY_URL", "http://localhost:5000/auth/verify")
+
+# Initialize CORS with credentials support for the frontend origin so the
+# verify page can POST tokens and receive cookies. Do NOT use '*' when
+# credentials are required.
+CORS(app, supports_credentials=True, resources={
+    r"/api/*": {"origins": FRONTEND_URL},
+    r"/auth/*": {"origins": FRONTEND_URL}
+})
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError(
@@ -51,8 +64,11 @@ def signup():
             "email": email,
             "password": password,
         }
-        if FRONTEND_URL:
-            payload_for_signup["options"] = {"email_redirect_to": FRONTEND_URL}
+        # Always pass AUTH_VERIFY_URL as the email redirect target so Supabase redirects to
+                # our backend verify handler. Keep FRONTEND_URL for the final client redirect after
+                # the backend sets cookies.
+                if AUTH_VERIFY_URL:
+                    payload_for_signup["options"] = {"email_redirect_to": AUTH_VERIFY_URL}
 
         response = supabase.auth.sign_up(payload_for_signup)
         user = getattr(response, "user", None)
@@ -76,6 +92,138 @@ def signup():
         )
     except Exception as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.get("/auth/verify")
+def auth_verify():
+    # This page reads the URL fragment (window.location.hash) which contains
+    # Supabase-issued tokens (access_token, refresh_token, expires_in, ...)
+    # and POSTs them to /auth/session so the server can set HttpOnly cookies.
+    html = """
+    <!doctype html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>Verifying...</title>
+    </head>
+    <body>
+      <p>Verifying your account — if you are not redirected, click Continue.</p>
+      <button id="continue" style="display:none;">Continue</button>
+      <script>
+      (function(){
+        try {
+          const hash = window.location.hash.substring(1);
+          const params = new URLSearchParams(hash);
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
+          const expires_in = params.get('expires_in');
+          const token_type = params.get('token_type');
+
+          function goToFrontend() {
+            // Remove fragment from URL so tokens are not left in history
+            try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch(e){}
+            window.location.href = "{{ frontend_url }}";
+          }
+
+          if (access_token) {
+            fetch('/auth/session', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ access_token, refresh_token, expires_in, token_type })
+            }).then(resp => {
+              // On success or failure, redirect to frontend; server will handle auth state.
+              goToFrontend();
+            }).catch(err => {
+              console.error('Failed to set session on server', err);
+              // Allow the user to continue manually if automatic step fails
+              const btn = document.getElementById('continue');
+              btn.style.display = 'inline';
+              btn.addEventListener('click', goToFrontend);
+            });
+          } else {
+            // No tokens in fragment: just redirect to frontend
+            goToFrontend();
+          }
+        } catch (e) {
+          console.error(e);
+          window.location.href = "{{ frontend_url }}";
+        }
+      })();
+      </script>
+    </body>
+    </html>
+    """
+    return render_template_string(html, frontend_url=FRONTEND_URL)
+
+
+@app.post("/auth/session")
+def auth_session():
+    """Accepts tokens posted from the verify page, validates them with Supabase,
+    and sets HttpOnly cookies for subsequent requests. This is the simple
+    cookie-based approach (access and refresh tokens stored directly in cookies).
+    """
+    payload = request.get_json(silent=True) or {}
+    access_token = payload.get("access_token")
+    refresh_token = payload.get("refresh_token")
+    expires_in = payload.get("expires_in")
+
+    if not access_token:
+        return jsonify({"error": "missing access_token"}), 400
+
+    try:
+        # Validate token with Supabase
+        resp = supabase.auth.get_user(access_token)
+        user = getattr(resp, "user", None)
+        if not user:
+            return jsonify({"error": "invalid token"}), 401
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 401
+
+    # Set cookies
+    response = make_response(jsonify({"ok": True}))
+    secure_flag = not app.debug
+
+    try:
+        max_age = int(expires_in) if expires_in else None
+    except Exception:
+        max_age = None
+
+    # Access token cookie (shorter lifetime)
+    if max_age and max_age > 0:
+        response.set_cookie(
+            "sb_access_token",
+            access_token,
+            httponly=True,
+            secure=secure_flag,
+            samesite="Lax",
+            max_age=max_age,
+            path="/",
+        )
+    else:
+        response.set_cookie(
+            "sb_access_token",
+            access_token,
+            httponly=True,
+            secure=secure_flag,
+            samesite="Lax",
+            path="/",
+        )
+
+    # Refresh token cookie (longer lifetime)
+    if refresh_token:
+        response.set_cookie(
+            "sb_refresh_token",
+            refresh_token,
+            httponly=True,
+            secure=secure_flag,
+            samesite="Lax",
+            max_age=60 * 60 * 24 * 30,  # 30 days
+            path="/",
+        )
+
+    return response
 
 
 @app.post("/api/login")
