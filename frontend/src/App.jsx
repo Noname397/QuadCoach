@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Auth from "./Auth.jsx";
 import Dashboard from "./Dashboard.jsx";
+import ProfileSetup from "./ProfileSetup.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -24,10 +25,10 @@ export default function App() {
             }
 
             const data = await response.json();
-            setUser({ ...parsedUser, ...data.user });
+            setUser({ ...parsedUser, ...data.user, ...data });
             localStorage.setItem(
               "quadcoach-user",
-              JSON.stringify({ ...parsedUser, ...data.user }),
+              JSON.stringify({ ...parsedUser, ...data.user, ...data }),
             );
           })
           .catch(() => {
@@ -42,10 +43,33 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  const handleLogin = (userData) => {
+  const handleLogin = useCallback(async (userData) => {
     setUser(userData);
     localStorage.setItem("quadcoach-user", JSON.stringify(userData));
-  };
+
+    try {
+      const response = await fetch(`${API_URL}/api/me`, {
+        headers: { Authorization: `Bearer ${userData.access_token}` },
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const hydratedUser = { ...userData, ...data.user, ...data };
+      setUser(hydratedUser);
+      localStorage.setItem("quadcoach-user", JSON.stringify(hydratedUser));
+    } catch (error) {
+      console.error("Could not load profile status:", error);
+    }
+  }, []);
+
+  const handleProfileComplete = useCallback(
+    (profile) => {
+      const updatedUser = { ...user, profile, profile_complete: true };
+      setUser(updatedUser);
+      localStorage.setItem("quadcoach-user", JSON.stringify(updatedUser));
+    },
+    [user],
+  );
 
   const handleLogout = async () => {
     try {
@@ -77,7 +101,15 @@ export default function App() {
         {loading ? (
           <p className="text-center text-gray-500">Loading…</p>
         ) : user ? (
-          <Dashboard user={user} onLogout={handleLogout} />
+          user.profile_complete ? (
+            <Dashboard user={user} onLogout={handleLogout} />
+          ) : (
+            <ProfileSetup
+              user={user}
+              onComplete={handleProfileComplete}
+              onLogout={handleLogout}
+            />
+          )
         ) : (
           <Auth onLogin={handleLogin} />
         )}

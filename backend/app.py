@@ -38,11 +38,30 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def serialize_user(user):
     if not user:
         return None
+    app_metadata = getattr(user, "app_metadata", {}) or {}
     return {
         "id": getattr(user, "id", None),
         "email": getattr(user, "email", None),
         "email_confirmed_at": getattr(user, "email_confirmed_at", None),
+        "auth_provider": app_metadata.get("provider", "email"),
     }
+
+
+def authenticated_supabase(token):
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    client.postgrest.auth(token)
+    return client
+
+
+def get_profile(token, user_id):
+    response = (
+        authenticated_supabase(token)
+        .table("profiles")
+        .select("id,name,target_role,experience_level,profile_picture,target_company")
+        .eq("id", user_id)
+        .execute()
+    )
+    return response.data[0] if response.data else None
 
 
 @app.get("/api/health")
@@ -287,9 +306,60 @@ def me():
         if not user:
             return jsonify({"error": "Invalid session."}), 401
 
-        return jsonify({"user": serialize_user(user)})
+        profile = get_profile(token, user.id)
+        return jsonify(
+            {
+                "user": serialize_user(user),
+                "profile": profile,
+                "profile_complete": bool(
+                    profile
+                    and profile.get("name")
+                    and profile.get("target_role")
+                    and profile.get("experience_level")
+                ),
+            }
+        )
     except Exception as exc:
         return jsonify({"error": str(exc)}), 401
+
+
+@app.post("/api/profile")
+def save_profile():
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing bearer token."}), 401
+
+    token = auth_header.split(" ", 1)[1].strip()
+    payload = request.get_json(silent=True) or {}
+    required_fields = {
+        "name": (payload.get("name") or "").strip(),
+        "target_role": (payload.get("target_role") or "").strip(),
+        "experience_level": (payload.get("experience_level") or "").strip(),
+    }
+
+    if not all(required_fields.values()):
+        return jsonify(
+            {"error": "Name, target role, and experience level are required."}
+        ), 400
+
+    try:
+        response = supabase.auth.get_user(token)
+        user = getattr(response, "user", None)
+        if not user:
+            return jsonify({"error": "Invalid session."}), 401
+
+        profile = {
+            "id": user.id,
+            **required_fields,
+            "profile_picture": (payload.get("profile_picture") or "").strip() or None,
+            "target_company": (payload.get("target_company") or "").strip() or None,
+        }
+        result = (
+            authenticated_supabase(token).table("profiles").upsert(profile).execute()
+        )
+        return jsonify({"profile": result.data[0] if result.data else profile})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.post("/api/logout")
