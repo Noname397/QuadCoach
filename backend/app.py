@@ -1,4 +1,8 @@
 import os
+import json
+from urllib.error import HTTPError
+from urllib.parse import quote
+from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request, render_template_string, make_response
@@ -38,11 +42,84 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def serialize_user(user):
     if not user:
         return None
+    app_metadata = getattr(user, "app_metadata", {}) or {}
     return {
         "id": getattr(user, "id", None),
         "email": getattr(user, "email", None),
         "email_confirmed_at": getattr(user, "email_confirmed_at", None),
+        "auth_provider": app_metadata.get("provider", "email"),
     }
+
+
+def authenticated_supabase(token):
+    client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    client.postgrest.auth(token)
+    return client
+
+
+def upload_avatar(token, path, picture_bytes, content_type):
+    storage_url = f"{SUPABASE_URL}/storage/v1/object/avatars/{quote(path, safe='/')}"
+    request = Request(
+        storage_url,
+        data=picture_bytes,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": SUPABASE_KEY,
+            "Content-Type": content_type,
+            "x-upsert": "true",
+        },
+    )
+    try:
+        with urlopen(request) as response:
+            response.read()
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Avatar upload failed ({exc.code}): {detail}") from exc
+
+
+def get_avatar_url(token, path):
+    sign_url = f"{SUPABASE_URL}/storage/v1/object/sign/avatars/{quote(path, safe='/')}"
+    request = Request(
+        sign_url,
+        data=json.dumps({"expiresIn": 3600}).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "apikey": SUPABASE_KEY,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urlopen(request) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        signed_url = payload.get("signedURL") or payload.get("signedUrl")
+        if not signed_url:
+            raise RuntimeError("Avatar URL response did not include a signed URL.")
+        if signed_url.startswith("http"):
+            return signed_url
+        if signed_url.startswith("/storage/v1/"):
+            return f"{SUPABASE_URL}{signed_url}"
+        return f"{SUPABASE_URL}/storage/v1/{signed_url.lstrip('/')}"
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Avatar URL failed ({exc.code}): {detail}") from exc
+
+
+def get_profile(token, user_id):
+    response = (
+        authenticated_supabase(token)
+        .table("profiles")
+        .select("id,name,profile_picture_path")
+        .eq("id", user_id)
+        .execute()
+    )
+    profile = response.data[0] if response.data else None
+    if profile and profile.get("profile_picture_path"):
+        profile["profile_picture_url"] = get_avatar_url(
+            token, profile["profile_picture_path"]
+        )
+    return profile
 
 
 @app.get("/api/health")
@@ -287,9 +364,78 @@ def me():
         if not user:
             return jsonify({"error": "Invalid session."}), 401
 
-        return jsonify({"user": serialize_user(user)})
+        profile = get_profile(token, user.id)
+        return jsonify(
+            {
+                "user": serialize_user(user),
+                "profile": profile,
+                "profile_complete": bool(profile and profile.get("name")),
+            }
+        )
     except Exception as exc:
         return jsonify({"error": str(exc)}), 401
+
+
+@app.put("/api/profile")
+def save_profile():
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing bearer token."}), 401
+
+    token = auth_header.split(" ", 1)[1].strip()
+    name = (request.form.get("name") or "").strip()
+    picture = request.files.get("profile_picture")
+
+    if not name:
+        return jsonify({"error": "Name is required."}), 400
+
+    try:
+        response = supabase.auth.get_user(token)
+        user = getattr(response, "user", None)
+        if not user:
+            return jsonify({"error": "Invalid session."}), 401
+
+        profile_picture_path = None
+        if picture and picture.filename:
+            allowed_types = {
+                "image/jpeg": "jpg",
+                "image/png": "png",
+                "image/webp": "webp",
+            }
+            extension = allowed_types.get(picture.mimetype)
+            picture_bytes = picture.read()
+            if not extension:
+                return jsonify({"error": "Use a JPEG, PNG, or WebP image."}), 400
+            if len(picture_bytes) > 5 * 1024 * 1024:
+                return jsonify(
+                    {"error": "Profile pictures must be 5 MB or smaller."}
+                ), 400
+
+            profile_picture_path = f"{user.id}/profile.{extension}"
+            upload_avatar(
+                token,
+                profile_picture_path,
+                picture_bytes,
+                picture.mimetype,
+            )
+
+        profile = {
+            "id": user.id,
+            "name": name,
+        }
+        if profile_picture_path:
+            profile["profile_picture_path"] = profile_picture_path
+        result = (
+            authenticated_supabase(token).table("profiles").upsert(profile).execute()
+        )
+        saved_profile = result.data[0] if result.data else profile
+        if saved_profile.get("profile_picture_path"):
+            saved_profile["profile_picture_url"] = get_avatar_url(
+                token, saved_profile["profile_picture_path"]
+            )
+        return jsonify({"profile": saved_profile})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.post("/api/logout")
