@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import Auth from "./Auth.jsx";
 import Dashboard from "./Dashboard.jsx";
 import ProfileSetup from "./ProfileSetup.jsx";
+import { supabase } from "./supabaseClient.js";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
@@ -44,14 +45,16 @@ export default function App() {
   }, []);
 
   const handleLogin = useCallback(async (userData) => {
-    setUser(userData);
+    setLoading(true);
     localStorage.setItem("quadcoach-user", JSON.stringify(userData));
 
     try {
       const response = await fetch(`${API_URL}/api/me`, {
         headers: { Authorization: `Bearer ${userData.access_token}` },
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        throw new Error("Could not load the user profile.");
+      }
 
       const data = await response.json();
       const hydratedUser = { ...userData, ...data.user, ...data };
@@ -59,6 +62,10 @@ export default function App() {
       localStorage.setItem("quadcoach-user", JSON.stringify(hydratedUser));
     } catch (error) {
       console.error("Could not load profile status:", error);
+      setUser(null);
+      localStorage.removeItem("quadcoach-user");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -82,6 +89,9 @@ export default function App() {
             Authorization: `Bearer ${parsed.access_token || ""}`,
           },
         });
+      }
+      if (supabase) {
+        await supabase.auth.signOut();
       }
     } catch (error) {
       console.error("Logout failed:", error);
