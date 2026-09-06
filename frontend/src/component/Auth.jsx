@@ -1,75 +1,27 @@
-import { useEffect, useState } from "react";
-import { supabase } from "./supabaseClient";
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-export default function Auth({ onLogin }) {
+export default function Auth() {
+  const { login, signUp, loginWithGoogle, authLoading } = useAuth();
   const [tab, setTab] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!supabase) return undefined;
-
-    const loadOAuthSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setMessage({
-          type: "error",
-          text: `Google login failed: ${error.message}`,
-        });
-        return;
-      }
-
-      if (data.session?.user) {
-        onLogin({
-          ...data.session.user,
-          access_token: data.session.access_token,
-        });
-      }
-    };
-
-    loadOAuthSession();
-    const { data: subscription } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session?.user) {
-          onLogin({
-            ...session.user,
-            access_token: session.access_token,
-          });
-        }
-      },
-    );
-
-    return () => subscription.subscription.unsubscribe();
-  }, [onLogin]);
-
   const handleGoogleLogin = async () => {
-    if (!supabase) {
-      setMessage({
-        type: "error",
-        text: "Google login is not configured. Add the Supabase Vite variables to frontend/.env.",
-      });
-      return;
-    }
-
     setLoading(true);
     setMessage(null);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: window.location.origin },
-    });
-
-    if (error) {
+    try {
+      await loginWithGoogle();
+    } catch (error) {
       setMessage({
         type: "error",
         text: `Google login failed: ${error.message}`,
       });
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const handleLogin = async (e) => {
@@ -78,22 +30,7 @@ export default function Auth({ onLogin }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
-      }
-
-      onLogin({
-        ...data.user,
-        access_token: data.session?.access_token,
-      });
+      await login(email, password);
     } catch (error) {
       const message = /verify|confirmed|confirm/i.test(error.message)
         ? "Please verify your email before logging in. Check the email you used to sign up."
@@ -110,17 +47,7 @@ export default function Auth({ onLogin }) {
     setMessage(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/signup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Signup failed");
-      }
+      const data = await signUp(email, password);
 
       if (data.requires_confirmation) {
         setMessage({
@@ -194,7 +121,7 @@ export default function Auth({ onLogin }) {
           <>
             <button
               type="button"
-              disabled={loading}
+              disabled={loading || authLoading}
               onClick={handleGoogleLogin}
               className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
@@ -241,7 +168,7 @@ export default function Auth({ onLogin }) {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || authLoading}
           className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {loading ? "Please wait…" : tab === "login" ? "Log In" : "Sign Up"}

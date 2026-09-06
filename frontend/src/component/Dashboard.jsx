@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Sidebar from "./Sidebar.jsx";
+import { useAuth } from "../context/AuthContext.jsx";
 
 function Avatar({ name, url, sizeClass }) {
   const [imageFailed, setImageFailed] = useState(false);
@@ -73,17 +74,13 @@ function ChatsView() {
   );
 }
 
-export default function Dashboard({ user, onLogout }) {
+export default function Dashboard() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm md:flex-row">
-      <Sidebar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        user={user}
-        onLogout={onLogout}
-      />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
       <main className="min-w-0 flex-1 p-6 sm:p-8">
         {activeTab === "profile" ? <ProfileView user={user} /> : <ChatsView />}
       </main>
