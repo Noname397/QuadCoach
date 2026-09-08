@@ -62,22 +62,27 @@ export function AuthProvider({ children }) {
 
     restoreSession();
 
-    const subscription = subscribeToAuthChanges(
-      async (_event, session) => {
-        if (!session?.user) return;
-        try {
-          setAuthUser({
-            ...session.user,
-            access_token: session.access_token,
-          });
-        } catch {
-          clearStoredUser();
-          if (mounted) setAuthUser(null);
-        } finally {
-          if (mounted) setLoading(false);
-        }
-      },
-    );
+    const subscription = subscribeToAuthChanges(async (event, session) => {
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setAuthUser(null);
+        clearStoredUser();
+        queryClient.removeQueries({ queryKey: ["current-user"] });
+        if (mounted) setLoading(false);
+        return;
+      }
+
+      try {
+        setAuthUser({
+          ...session.user,
+          access_token: session.access_token,
+        });
+      } catch {
+        clearStoredUser();
+        if (mounted) setAuthUser(null);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    });
 
     return () => {
       mounted = false;
