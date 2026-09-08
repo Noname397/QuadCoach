@@ -1,11 +1,13 @@
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 
 const navigationItems = [
   { id: "profile", label: "Profile", icon: "P" },
   { id: "chats", label: "Chats", icon: "C" },
 ];
 
-export default function Sidebar({ activeTab, onTabChange, user, onLogout }) {
+export default function Sidebar({ activeTab, onTabChange }) {
+  const { user, logout } = useAuth();
   const [imageFailed, setImageFailed] = useState(false);
   const profileName = user.profile?.name || user.email || "Q";
   const avatarUrl = user.profile?.profile_picture_url;
@@ -55,7 +57,7 @@ export default function Sidebar({ activeTab, onTabChange, user, onLogout }) {
 
       <button
         type="button"
-        onClick={onLogout}
+        onClick={logout}
         className="m-3 mt-auto rounded-md px-3 py-2 text-left text-sm font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-900"
       >
         Log out

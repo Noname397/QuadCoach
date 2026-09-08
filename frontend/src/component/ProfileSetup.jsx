@@ -1,8 +1,8 @@
 import { useState } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
-
-export default function ProfileSetup({ user, onComplete, onLogout }) {
+export default function ProfileSetup() {
+  const { user, updateProfile, logout } = useAuth();
   const [form, setForm] = useState({
     name: "",
     profile_picture: null,
@@ -44,17 +44,7 @@ export default function ProfileSetup({ user, onComplete, onLogout }) {
       if (form.profile_picture)
         body.append("profile_picture", form.profile_picture);
 
-      const response = await fetch(`${API_URL}/api/profile`, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${user.access_token}`,
-        },
-        body,
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Could not save your profile.");
-      onComplete(data.profile);
+      await updateProfile(body);
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -117,7 +107,7 @@ export default function ProfileSetup({ user, onComplete, onLogout }) {
         <div className="flex items-center justify-between gap-4">
           <button
             type="button"
-            onClick={onLogout}
+            onClick={logout}
             className="text-sm font-medium text-gray-500 hover:text-gray-800"
           >
             Log out
