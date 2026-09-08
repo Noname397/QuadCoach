@@ -84,8 +84,12 @@ export default function Auth() {
 
   return (
     <div className="mx-auto mt-16 w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="mb-6 flex border-b border-gray-200">
+      <div className="mb-6 flex border-b border-gray-200" role="tablist" aria-label="Authentication options">
         <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "login"}
+          aria-controls="auth-form"
           className={`flex-1 pb-2 text-sm font-medium ${
             tab === "login"
               ? "border-b-2 border-blue-600 text-blue-600"
@@ -99,6 +103,10 @@ export default function Auth() {
           Login
         </button>
         <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "signup"}
+          aria-controls="auth-form"
           className={`flex-1 pb-2 text-sm font-medium ${
             tab === "signup"
               ? "border-b-2 border-blue-600 text-blue-600"
@@ -114,7 +122,9 @@ export default function Auth() {
       </div>
 
       <form
+        id="auth-form"
         className="space-y-4"
+        aria-busy={loading || authLoading}
         onSubmit={tab === "login" ? handleLogin : handleSignUp}
       >
         {tab === "login" && (
@@ -136,10 +146,12 @@ export default function Auth() {
           </>
         )}
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label htmlFor="auth-email" className="mb-1 block text-sm font-medium text-gray-700">
             Email
           </label>
           <input
+            id="auth-email"
+            name="email"
             type="email"
             required
             value={email}
@@ -148,10 +160,12 @@ export default function Auth() {
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-700">
+          <label htmlFor="auth-password" className="mb-1 block text-sm font-medium text-gray-700">
             Password
           </label>
           <input
+            id="auth-password"
+            name="password"
             type="password"
             required
             value={password}
@@ -161,7 +175,11 @@ export default function Auth() {
         </div>
 
         {message && (
-          <p className={`text-sm ${messageStyles[message.type]}`}>
+          <p
+            role={message.type === "error" ? "alert" : undefined}
+            aria-live="polite"
+            className={`text-sm ${messageStyles[message.type]}`}
+          >
             {message.text}
           </p>
         )}

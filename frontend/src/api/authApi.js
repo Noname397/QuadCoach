@@ -33,10 +33,24 @@ export function clearStoredUser() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-async function request(path, options) {
-  const response = await fetch(`${API_URL}${path}`, options);
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "Request failed");
+export async function request(path, options) {
+  let response;
+
+  try {
+    response = await fetch(`${API_URL}${path}`, options);
+  } catch {
+    throw new Error("Unable to connect to the server.");
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json")
+    ? await response.json()
+    : null;
+
+  if (!response.ok) {
+    throw new Error(data?.error || `Request failed (${response.status})`);
+  }
+
   return data;
 }
 
