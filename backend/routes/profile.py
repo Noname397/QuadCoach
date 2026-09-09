@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from services.supabase_service import (
     authenticated_supabase,
@@ -59,4 +59,5 @@ def save_profile():
             )
         return jsonify({"profile": saved_profile})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+        current_app.logger.exception("Profile update failed")
+        return jsonify({"error": "Unable to update profile."}), 400

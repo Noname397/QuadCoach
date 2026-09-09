@@ -41,7 +41,8 @@ def signup():
             }
         )
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+        current_app.logger.exception("Signup failed")
+        return jsonify({"error": "Unable to create account."}), 400
 
 
 @auth_bp.post("/api/login")
@@ -80,14 +81,18 @@ def login():
         )
     except Exception as exc:
         message = str(exc)
-        if "email not confirmed" in message.lower() or "verify your email" in message.lower():
+        if (
+            "email not confirmed" in message.lower()
+            or "verify your email" in message.lower()
+        ):
             return jsonify(
                 {
                     "error": "Please verify your email before logging in.",
                     "requires_confirmation": True,
                 }
             ), 403
-        return jsonify({"error": message}), 401
+        current_app.logger.exception("Login failed")
+        return jsonify({"error": "Unable to log in."}), 401
 
 
 @auth_bp.get("/api/me")
@@ -113,7 +118,8 @@ def me():
             }
         )
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 401
+        current_app.logger.exception("Loading current user failed")
+        return jsonify({"error": "Unable to load your account."}), 401
 
 
 @auth_bp.post("/api/logout")
@@ -122,7 +128,8 @@ def logout():
         supabase.auth.sign_out()
         return jsonify({"message": "Logged out successfully."})
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+        current_app.logger.exception("Logout failed")
+        return jsonify({"error": "Unable to log out."}), 400
 
 
 @auth_bp.get("/auth/verify")
@@ -198,7 +205,8 @@ def auth_session():
         if not user:
             return jsonify({"error": "invalid token"}), 401
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 401
+        current_app.logger.exception("Session validation failed")
+        return jsonify({"error": "Unable to validate the session."}), 401
 
     response = make_response(jsonify({"ok": True}))
     secure_flag = not current_app.debug
