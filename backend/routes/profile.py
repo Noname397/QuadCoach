@@ -5,6 +5,7 @@ from services.supabase_service import (
     get_avatar_url,
     supabase,
     upload_avatar,
+    upload_resume,
 )
 
 profile_bp = Blueprint("profile", __name__)
@@ -19,6 +20,7 @@ def save_profile():
     token = auth_header.split(" ", 1)[1].strip()
     name = (request.form.get("name") or "").strip()
     picture = request.files.get("profile_picture")
+    resume = request.files.get("resume")
 
     if not name:
         return jsonify({"error": "Name is required."}), 400
@@ -48,9 +50,28 @@ def save_profile():
             profile_picture_path = f"{user.id}/profile.{extension}"
             upload_avatar(token, profile_picture_path, picture_bytes, picture.mimetype)
 
+        resume_path = None
+        resume_metadata = {}
+        if resume and resume.filename:
+            resume_bytes = resume.read()
+            if resume.mimetype != "application/pdf":
+                return jsonify({"error": "Use a PDF file for your CV."}), 400
+            if len(resume_bytes) > 5 * 1024 * 1024:
+                return jsonify({"error": "CV files must be 5 MB or smaller."}), 400
+
+            resume_path = f"{user.id}/resume.pdf"
+            upload_resume(token, resume_path, resume_bytes, resume.mimetype)
+            resume_metadata = {
+                "resume_path": resume_path,
+                "resume_filename": resume.filename,
+                "resume_mime_type": resume.mimetype,
+                "resume_size": len(resume_bytes),
+            }
+
         profile = {"id": user.id, "name": name}
         if profile_picture_path:
             profile["profile_picture_path"] = profile_picture_path
+        profile.update(resume_metadata)
         result = authenticated_supabase(token).table("profiles").upsert(profile).execute()
         saved_profile = result.data[0] if result.data else profile
         if saved_profile.get("profile_picture_path"):
@@ -58,6 +79,6 @@ def save_profile():
                 token, saved_profile["profile_picture_path"]
             )
         return jsonify({"profile": saved_profile})
-    except Exception as exc:
+    except Exception:
         current_app.logger.exception("Profile update failed")
         return jsonify({"error": "Unable to update profile."}), 400
