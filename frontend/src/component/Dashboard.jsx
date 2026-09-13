@@ -74,13 +74,18 @@ function ChatsView() {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ menuOpen, onMenuClose }) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("profile");
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm md:flex-row">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="-mx-6 flex max-w-6xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm md:flex-row">
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isOpen={menuOpen}
+        onClose={onMenuClose}
+      />
       <main className="min-w-0 flex-1 p-6 sm:p-8">
         {activeTab === "profile" ? <ProfileView user={user} /> : <ChatsView />}
       </main>
