@@ -32,7 +32,9 @@ def get_profile(token, user_id):
     response = (
         authenticated_supabase(token)
         .table("profiles")
-        .select("id,name,profile_picture_path")
+        .select(
+            "id,name,profile_picture_path,resume_path,resume_filename,resume_mime_type,resume_size"
+        )
         .eq("id", user_id)
         .execute()
     )
@@ -45,10 +47,18 @@ def get_profile(token, user_id):
 
 
 def upload_avatar(token, path, picture_bytes, content_type):
-    storage_url = f"{SUPABASE_URL}/storage/v1/object/avatars/{quote(path, safe='/')}"
+    upload_storage_file("avatars", "Avatar", token, path, picture_bytes, content_type)
+
+
+def upload_resume(token, path, resume_bytes, content_type):
+    upload_storage_file("resumes", "Resume", token, path, resume_bytes, content_type)
+
+
+def upload_storage_file(bucket, label, token, path, file_bytes, content_type):
+    storage_url = f"{SUPABASE_URL}/storage/v1/object/{bucket}/{quote(path, safe='/')}"
     upload_request = Request(
         storage_url,
-        data=picture_bytes,
+        data=file_bytes,
         method="POST",
         headers={
             "Authorization": f"Bearer {token}",
@@ -62,7 +72,7 @@ def upload_avatar(token, path, picture_bytes, content_type):
             response.read()
     except HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Avatar upload failed ({exc.code}): {detail}") from exc
+        raise RuntimeError(f"{label} upload failed ({exc.code}): {detail}") from exc
 
 
 def get_avatar_url(token, path):
