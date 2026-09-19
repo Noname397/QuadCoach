@@ -49,6 +49,15 @@ export default function App() {
                 }
               />
               <Route
+                path="/profile/edit"
+                element={
+                  <Dashboard
+                    menuOpen={menuOpen}
+                    onMenuClose={() => setMenuOpen(false)}
+                  />
+                }
+              />
+              <Route
                 path="/chats"
                 element={
                   <Dashboard
@@ -60,7 +69,13 @@ export default function App() {
               <Route path="*" element={<Navigate to="/profile" replace />} />
             </Routes>
           ) : (
-            <ProfileSetup />
+            <Routes>
+              <Route path="/profile/setup" element={<ProfileSetup />} />
+              <Route
+                path="*"
+                element={<Navigate to="/profile/setup" replace />}
+              />
+            </Routes>
           )
         ) : (
           <Auth />

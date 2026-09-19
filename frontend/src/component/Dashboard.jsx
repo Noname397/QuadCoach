@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar.jsx";
 import ProfileSetup from "./ProfileSetup.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
@@ -28,7 +28,7 @@ function Avatar({ name, url, sizeClass }) {
   );
 }
 
-function ProfileView({ user, onEdit }) {
+function ProfileView({ user }) {
   const profileName = user.profile?.name || user.email;
   const avatarUrl = user.profile?.profile_picture_url;
 
@@ -54,13 +54,12 @@ function ProfileView({ user, onEdit }) {
             <p className="mt-1 text-sm text-gray-500">Your QuadCoach profile</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onEdit}
+        <Link
+          to="/profile/edit"
           className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
         >
           Edit profile
-        </button>
+        </Link>
       </div>
     </section>
   );
@@ -89,7 +88,7 @@ export default function Dashboard({ menuOpen, onMenuClose }) {
   const { user } = useAuth();
   const location = useLocation();
   const activeTab = location.pathname === "/chats" ? "chats" : "profile";
-  const [editingProfile, setEditingProfile] = useState(false);
+  const editingProfile = location.pathname === "/profile/edit";
 
   return (
     <div className="-mx-6 flex max-w-6xl flex-col overflow-hidden rounded-lg border border-gray-200 bg-gray-50 shadow-sm md:flex-row">
@@ -97,9 +96,9 @@ export default function Dashboard({ menuOpen, onMenuClose }) {
       <main className="min-w-0 flex-1 p-6 sm:p-8">
         {activeTab === "profile" ? (
           editingProfile ? (
-            <ProfileSetup editing onCancel={() => setEditingProfile(false)} />
+            <ProfileSetup editing />
           ) : (
-            <ProfileView user={user} onEdit={() => setEditingProfile(true)} />
+            <ProfileView user={user} />
           )
         ) : (
           <ChatsView />

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const RESUME_TYPES = [
@@ -9,6 +10,7 @@ const RESUME_TYPES = [
 
 export default function ProfileSetup({ editing = false, onCancel }) {
   const { user, updateProfile, logout } = useAuth();
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     name: user.profile?.name || "",
     profile_picture: null,
@@ -59,7 +61,7 @@ export default function ProfileSetup({ editing = false, onCancel }) {
       if (form.resume) body.append("resume", form.resume);
 
       await updateProfile(body);
-      onCancel?.();
+      navigate("/profile", { replace: true });
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -155,7 +157,7 @@ export default function ProfileSetup({ editing = false, onCancel }) {
             {editing && (
               <button
                 type="button"
-                onClick={onCancel}
+                onClick={() => (onCancel ? onCancel() : navigate("/profile"))}
                 className="text-sm font-medium text-gray-500 hover:text-gray-800"
               >
                 Cancel
