@@ -2,6 +2,7 @@ import Auth from "./component/Auth.jsx";
 import Dashboard from "./component/Dashboard.jsx";
 import ProfileSetup from "./component/ProfileSetup.jsx";
 import { useAuth } from "./context/AuthContext.jsx";
+import { Navigate, Route, Routes } from "react-router-dom";
 import { useState } from "react";
 
 export default function App() {
@@ -37,10 +38,27 @@ export default function App() {
           <p className="text-center text-gray-500">Loading…</p>
         ) : user ? (
           user.profile_complete ? (
-            <Dashboard
-              menuOpen={menuOpen}
-              onMenuClose={() => setMenuOpen(false)}
-            />
+            <Routes>
+              <Route
+                path="/profile"
+                element={
+                  <Dashboard
+                    menuOpen={menuOpen}
+                    onMenuClose={() => setMenuOpen(false)}
+                  />
+                }
+              />
+              <Route
+                path="/chats"
+                element={
+                  <Dashboard
+                    menuOpen={menuOpen}
+                    onMenuClose={() => setMenuOpen(false)}
+                  />
+                }
+              />
+              <Route path="*" element={<Navigate to="/profile" replace />} />
+            </Routes>
           ) : (
             <ProfileSetup />
           )

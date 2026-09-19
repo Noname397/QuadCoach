@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NavLink } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const navigationItems = [
@@ -6,16 +7,11 @@ const navigationItems = [
   { id: "chats", label: "Chats" },
 ];
 
-export default function Sidebar({ activeTab, onTabChange, isOpen, onClose }) {
+export default function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth();
   const [imageFailed, setImageFailed] = useState(false);
   const profileName = user.profile?.name || user.email || "Q";
   const avatarUrl = user.profile?.profile_picture_url;
-
-  const handleTabChange = (tabId) => {
-    onTabChange(tabId);
-    onClose();
-  };
 
   return (
     <>
@@ -55,15 +51,17 @@ export default function Sidebar({ activeTab, onTabChange, isOpen, onClose }) {
 
         <nav className="flex flex-col gap-2 p-3">
           {navigationItems.map((item) => (
-            <button
+            <NavLink
               key={item.id}
-              type="button"
-              onClick={() => handleTabChange(item.id)}
-              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition ${
-                activeTab === item.id
-                  ? "bg-blue-50 text-blue-700"
-                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-              }`}
+              to={`/${item.id}`}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition ${
+                  isActive
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                }`
+              }
             >
               <span
                 className="flex h-6 w-6 items-center justify-center"
@@ -100,7 +98,7 @@ export default function Sidebar({ activeTab, onTabChange, isOpen, onClose }) {
                 )}
               </span>
               {item.label}
-            </button>
+            </NavLink>
           ))}
         </nav>
 

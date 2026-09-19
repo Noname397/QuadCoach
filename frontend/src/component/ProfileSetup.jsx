@@ -73,7 +73,7 @@ export default function ProfileSetup({ editing = false, onCancel }) {
         <p className="mt-2 text-gray-600">
           {editing
             ? "Keep your name, photo, and CV up to date."
-            : "Add the details you want to use in QuadCoach."}
+            : "Add the details you want to use in QuadCoach"}
         </p>
       </div>
 
