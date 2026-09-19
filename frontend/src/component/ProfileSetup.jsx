@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 
+const RESUME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+
 export default function ProfileSetup({ editing = false, onCancel }) {
   const { user, updateProfile, logout } = useAuth();
   const [form, setForm] = useState({
@@ -25,12 +31,12 @@ export default function ProfileSetup({ editing = false, onCancel }) {
       file &&
       ((event.target.name === "profile_picture" &&
         !["image/jpeg", "image/png", "image/webp"].includes(file.type)) ||
-        (event.target.name === "resume" && file.type !== "application/pdf") ||
+        (event.target.name === "resume" && !RESUME_TYPES.includes(file.type)) ||
         file.size > 5 * 1024 * 1024)
     ) {
       setError(
         event.target.name === "resume"
-          ? "Choose a PDF CV up to 5 MB."
+          ? "Choose a PDF, DOC, or DOCX CV up to 5 MB."
           : "Choose a JPEG, PNG, or WebP image up to 5 MB.",
       );
       event.target.value = "";
@@ -94,12 +100,14 @@ export default function ProfileSetup({ editing = false, onCancel }) {
           <label className="block sm:col-span-2">
             <span className="mb-1 block text-sm font-medium text-gray-700">
               CV / resume{" "}
-              <span className="font-normal text-gray-400">(optional, PDF)</span>
+              <span className="font-normal text-gray-400">
+                (optional, PDF, DOC, or DOCX)
+              </span>
             </span>
             <input
               name="resume"
               type="file"
-              accept="application/pdf,.pdf"
+              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               onChange={updateField}
               className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />

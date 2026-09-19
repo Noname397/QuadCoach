@@ -54,12 +54,20 @@ def save_profile():
         resume_metadata = {}
         if resume and resume.filename:
             resume_bytes = resume.read()
-            if resume.mimetype != "application/pdf":
-                return jsonify({"error": "Use a PDF file for your CV."}), 400
+            resume_types = {
+                "application/pdf": "pdf",
+                "application/msword": "doc",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+            }
+            resume_extension = resume_types.get(resume.mimetype)
+            if not resume_extension:
+                return jsonify(
+                    {"error": "Use a PDF, DOC, or DOCX file for your CV."}
+                ), 400
             if len(resume_bytes) > 5 * 1024 * 1024:
                 return jsonify({"error": "CV files must be 5 MB or smaller."}), 400
 
-            resume_path = f"{user.id}/resume.pdf"
+            resume_path = f"{user.id}/resume.{resume_extension}"
             upload_resume(token, resume_path, resume_bytes, resume.mimetype)
             resume_metadata = {
                 "resume_path": resume_path,
