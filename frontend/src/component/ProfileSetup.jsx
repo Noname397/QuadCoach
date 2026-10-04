@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import EditableField from "./EditableField.jsx";
+import LoadingOverlay from "./LoadingOverlay.jsx";
+import TechStackEditor from "./TechStackEditor.jsx";
 
 const RESUME_TYPES = [
   "application/pdf",
@@ -19,6 +22,83 @@ export default function ProfileSetup({ editing = false, onCancel }) {
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
   const [resumePreview, setResumePreview] = useState(null);
+
+  const updateResumeItem = (section, index, field, value) => {
+    setResumePreview((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        [section]: current.details[section].map((item, itemIndex) =>
+          itemIndex === index ? { ...item, [field]: value } : item,
+        ),
+      },
+    }));
+  };
+
+  const updateResumeSkill = (index, value) => {
+    setResumePreview((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        skills: current.details.skills.map((skill, skillIndex) =>
+          skillIndex === index ? value : skill,
+        ),
+      },
+    }));
+  };
+
+  const addResumeSkill = () => {
+    setResumePreview((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        skills: [...current.details.skills, ""],
+      },
+    }));
+  };
+
+  const removeResumeSkill = (index) => {
+    setResumePreview((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        skills: current.details.skills.filter(
+          (_, skillIndex) => skillIndex !== index,
+        ),
+      },
+    }));
+  };
+
+  const updateTechStack = (section, entryIndex, techStack) => {
+    setResumePreview((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        [section]: current.details[section].map((entry, index) =>
+          index === entryIndex ? { ...entry, tech_stack: techStack } : entry,
+        ),
+      },
+    }));
+  };
+
+  const updateResumeBullet = (section, index, bulletIndex, value) => {
+    setResumePreview((current) => ({
+      ...current,
+      details: {
+        ...current.details,
+        [section]: current.details[section].map((item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                bullets: item.bullets.map((bullet, currentBulletIndex) =>
+                  currentBulletIndex === bulletIndex ? value : bullet,
+                ),
+              }
+            : item,
+        ),
+      },
+    }));
+  };
 
   const updateField = async (event) => {
     const input = event.target;
@@ -57,7 +137,6 @@ export default function ProfileSetup({ editing = false, onCancel }) {
     setParsing(true);
     try {
       const parsedResume = await parseResume(file);
-      console.log("Resume extraction result:", parsedResume);
       setResumePreview(parsedResume);
     } catch (parseError) {
       setError(parseError.message);
@@ -134,9 +213,6 @@ export default function ProfileSetup({ editing = false, onCancel }) {
               onChange={updateField}
               className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            {parsing && (
-              <p className="mt-1 text-sm text-gray-500">Parsing resume...</p>
-            )}
             {user.profile?.resume_filename && !form.resume && (
               <p className="mt-1 text-xs text-gray-500">
                 Current CV: {user.profile.resume_filename}
@@ -245,25 +321,75 @@ export default function ProfileSetup({ editing = false, onCancel }) {
                     {resumePreview.details.headline}
                   </p>
                 )}
-                <ResumeSection
-                  title="Contact"
-                  bullets={[
-                    resumePreview.details.contact.name,
-                    resumePreview.details.contact.email,
-                    resumePreview.details.contact.phone,
-                    resumePreview.details.contact.location,
-                  ].filter(Boolean)}
-                />
                 {resumePreview.details.summary && (
                   <ResumeSection
                     title="Summary"
                     bullets={[resumePreview.details.summary]}
                   />
                 )}
-                <ResumeSection
-                  title="Skills"
-                  bullets={resumePreview.details.skills}
-                />
+                <section>
+                  <h4 className="mb-3 text-sm font-semibold text-gray-900">
+                    Skills
+                  </h4>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {resumePreview.details.skills.map((skill, index) => (
+                      <div
+                        key={`skill-${index}`}
+                        className="flex items-center rounded-full border border-gray-300 bg-white pl-3 pr-1 shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
+                      >
+                        <input
+                          aria-label={`Skill ${index + 1}`}
+                          type="text"
+                          value={skill}
+                          onChange={(event) =>
+                            updateResumeSkill(index, event.target.value)
+                          }
+                          className="w-28 bg-transparent py-1.5 text-sm text-gray-900 outline-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label={`Remove skill ${index + 1}`}
+                          onClick={() => removeResumeSkill(index)}
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            fill="none"
+                            className="h-4 w-4"
+                          >
+                            <path
+                              d="m6 6 8 8M14 6l-8 8"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      aria-label="Add skill"
+                      onClick={addResumeSkill}
+                      className="flex h-9 w-9 items-center justify-center rounded-full border border-dashed border-gray-400 text-gray-600 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        className="h-5 w-5"
+                      >
+                        <path
+                          d="M10 4v12M4 10h12"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                </section>
                 {resumePreview.details.experience.length > 0 && (
                   <section>
                     <h4 className="mb-2 text-sm font-semibold text-gray-900">
@@ -271,38 +397,153 @@ export default function ProfileSetup({ editing = false, onCancel }) {
                     </h4>
                     <div className="space-y-4">
                       {resumePreview.details.experience.map((role, index) => (
-                        <div key={`${role.company}-${role.title}-${index}`}>
-                          <p className="font-medium text-gray-800">
-                            {[role.title, role.company]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {[role.location, role.start_date, role.end_date]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                          <BulletList items={role.bullets} />
+                        <div
+                          key={`${role.company}-${role.title}-${index}`}
+                          className="space-y-3 rounded-md border border-gray-200 p-4"
+                        >
+                          <EditableField
+                            label="Job title"
+                            value={role.title}
+                            onChange={(value) =>
+                              updateResumeItem("experience", index, "title", value)
+                            }
+                          />
+                          <EditableField
+                            label="Company"
+                            value={role.company}
+                            onChange={(value) =>
+                              updateResumeItem("experience", index, "company", value)
+                            }
+                          />
+                          <EditableField
+                            label="Location"
+                            value={role.location}
+                            onChange={(value) =>
+                              updateResumeItem("experience", index, "location", value)
+                            }
+                          />
+                          <TechStackEditor
+                            label={`Experience ${index + 1} tech stack`}
+                            value={role.tech_stack || []}
+                            onChange={(techStack) =>
+                              updateTechStack("experience", index, techStack)
+                            }
+                          />
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <EditableField
+                              label="Start date"
+                              value={role.start_date}
+                              type="month"
+                              onChange={(value) =>
+                                updateResumeItem(
+                                  "experience",
+                                  index,
+                                  "start_date",
+                                  value,
+                                )
+                              }
+                            />
+                            <EditableField
+                              label="End date"
+                              value={role.end_date}
+                              type="month"
+                              allowPresent
+                              onChange={(value) =>
+                                updateResumeItem(
+                                  "experience",
+                                  index,
+                                  "end_date",
+                                  value,
+                                )
+                              }
+                            />
+                          </div>
+                          {role.bullets.map((bullet, bulletIndex) => (
+                            <EditableField
+                              key={`experience-${index}-bullet-${bulletIndex}`}
+                              label={`Description ${bulletIndex + 1}`}
+                              multiline
+                              value={bullet}
+                              onChange={(value) =>
+                                updateResumeBullet(
+                                  "experience",
+                                  index,
+                                  bulletIndex,
+                                  value,
+                                )
+                              }
+                            />
+                          ))}
                         </div>
                       ))}
                     </div>
                   </section>
                 )}
                 {resumePreview.details.education.length > 0 && (
-                  <ResumeSection
-                    title="Education"
-                    bullets={resumePreview.details.education.map((item) =>
-                      [
-                        item.degree,
-                        item.field,
-                        item.institution,
-                        item.start_date,
-                        item.end_date,
-                      ]
-                        .filter(Boolean)
-                        .join(" · "),
-                    )}
-                  />
+                  <section>
+                    <h4 className="mb-2 text-sm font-semibold text-gray-900">
+                      Education
+                    </h4>
+                    <div className="space-y-4">
+                      {resumePreview.details.education.map((item, index) => (
+                        <div
+                          key={`${item.institution}-${index}`}
+                          className="space-y-3 rounded-md border border-gray-200 p-4"
+                        >
+                          <EditableField
+                            label="Institution"
+                            value={item.institution}
+                            onChange={(value) =>
+                              updateResumeItem("education", index, "institution", value)
+                            }
+                          />
+                          <EditableField
+                            label="Degree"
+                            value={item.degree}
+                            onChange={(value) =>
+                              updateResumeItem("education", index, "degree", value)
+                            }
+                          />
+                          <EditableField
+                            label="Field of study"
+                            value={item.field}
+                            onChange={(value) =>
+                              updateResumeItem("education", index, "field", value)
+                            }
+                          />
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <EditableField
+                              label="Start date"
+                              value={item.start_date}
+                              type="month"
+                              onChange={(value) =>
+                                updateResumeItem(
+                                  "education",
+                                  index,
+                                  "start_date",
+                                  value,
+                                )
+                              }
+                            />
+                            <EditableField
+                              label="End date"
+                              value={item.end_date}
+                              type="month"
+                              allowPresent
+                              onChange={(value) =>
+                                updateResumeItem(
+                                  "education",
+                                  index,
+                                  "end_date",
+                                  value,
+                                )
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 )}
                 {resumePreview.details.projects.length > 0 && (
                   <section>
@@ -311,16 +552,82 @@ export default function ProfileSetup({ editing = false, onCancel }) {
                     </h4>
                     <div className="space-y-3">
                       {resumePreview.details.projects.map((project, index) => (
-                        <div key={`${project.name}-${index}`}>
-                          <p className="font-medium text-gray-800">
-                            {project.name}
-                          </p>
-                          {project.description && (
-                            <p className="text-sm text-gray-600">
-                              {project.description}
-                            </p>
-                          )}
-                          <BulletList items={project.bullets} />
+                        <div
+                          key={`${project.name}-${index}`}
+                          className="space-y-3 rounded-md border border-gray-200 p-4"
+                        >
+                          <EditableField
+                            label="Project name"
+                            value={project.name}
+                            onChange={(value) =>
+                              updateResumeItem("projects", index, "name", value)
+                            }
+                          />
+                          <EditableField
+                            label="Description"
+                            multiline
+                            value={project.description}
+                            onChange={(value) =>
+                              updateResumeItem(
+                                "projects",
+                                index,
+                                "description",
+                                value,
+                              )
+                            }
+                          />
+                          <TechStackEditor
+                            label={`Project ${index + 1} tech stack`}
+                            value={project.tech_stack || []}
+                            onChange={(techStack) =>
+                              updateTechStack("projects", index, techStack)
+                            }
+                          />
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <EditableField
+                              label="Start date"
+                              value={project.start_date}
+                              type="month"
+                              onChange={(value) =>
+                                updateResumeItem(
+                                  "projects",
+                                  index,
+                                  "start_date",
+                                  value,
+                                )
+                              }
+                            />
+                            <EditableField
+                              label="End date"
+                              value={project.end_date}
+                              type="month"
+                              allowPresent
+                              onChange={(value) =>
+                                updateResumeItem(
+                                  "projects",
+                                  index,
+                                  "end_date",
+                                  value,
+                                )
+                              }
+                            />
+                          </div>
+                          {project.bullets.map((bullet, bulletIndex) => (
+                            <EditableField
+                              key={`project-${index}-bullet-${bulletIndex}`}
+                              label={`Description ${bulletIndex + 1}`}
+                              multiline
+                              value={bullet}
+                              onChange={(value) =>
+                                updateResumeBullet(
+                                  "projects",
+                                  index,
+                                  bulletIndex,
+                                  value,
+                                )
+                              }
+                            />
+                          ))}
                         </div>
                       ))}
                     </div>
@@ -348,6 +655,10 @@ export default function ProfileSetup({ editing = false, onCancel }) {
           </section>
         </div>
       )}
+      <LoadingOverlay
+        visible={parsing || loading}
+        message={parsing ? "Parsing resume..." : "Saving profile..."}
+      />
     </div>
   );
 }
