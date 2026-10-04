@@ -7,8 +7,63 @@ from services.supabase_service import (
     upload_avatar,
     upload_resume,
 )
+from services.resume_parser import ResumeExtractionError, extract_resume_text
+from services.resume_llm import (
+    ResumeLLMError,
+    ResumeLLMNotConfiguredError,
+    extract_resume_details,
+)
 
 profile_bp = Blueprint("profile", __name__)
+
+
+@profile_bp.post("/api/resume/parse")
+def parse_resume():
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing bearer token."}), 401
+
+    token = auth_header.split(" ", 1)[1].strip()
+    resume = request.files.get("resume")
+    if not resume or not resume.filename:
+        return jsonify({"error": "Choose a PDF or DOCX file for your CV."}), 400
+
+    if resume.mimetype not in {
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    }:
+        return jsonify({"error": "Use a PDF or DOCX file for your CV."}), 400
+
+    resume_bytes = resume.read()
+    if len(resume_bytes) > 5 * 1024 * 1024:
+        return jsonify({"error": "CV files must be 5 MB or smaller."}), 400
+
+    try:
+        response = supabase.auth.get_user(token)
+        user = getattr(response, "user", None)
+        if not user:
+            return jsonify({"error": "Invalid session."}), 401
+
+        resume_text = extract_resume_text(resume_bytes, resume.mimetype)
+        resume_details = extract_resume_details(resume_text)
+        return jsonify(
+            {
+                "filename": resume.filename,
+                "content_type": resume.mimetype,
+                "size": len(resume_bytes),
+                "details": resume_details,
+            }
+        )
+    except ResumeExtractionError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except ResumeLLMNotConfiguredError as exc:
+        return jsonify({"error": str(exc)}), 503
+    except ResumeLLMError as exc:
+        current_app.logger.warning("Resume extraction failed: %s", exc)
+        return jsonify({"error": str(exc)}), 502
+    except Exception:
+        current_app.logger.exception("Resume parsing or AI extraction failed")
+        return jsonify({"error": "Unable to extract resume details."}), 502
 
 
 @profile_bp.put("/api/profile")
@@ -56,17 +111,15 @@ def save_profile():
             resume_bytes = resume.read()
             resume_types = {
                 "application/pdf": "pdf",
-                "application/msword": "doc",
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
             }
             resume_extension = resume_types.get(resume.mimetype)
             if not resume_extension:
-                return jsonify(
-                    {"error": "Use a PDF, DOC, or DOCX file for your CV."}
-                ), 400
+                return jsonify({"error": "Use a PDF or DOCX file for your CV."}), 400
             if len(resume_bytes) > 5 * 1024 * 1024:
                 return jsonify({"error": "CV files must be 5 MB or smaller."}), 400
 
+            resume_text = extract_resume_text(resume_bytes, resume.mimetype)
             resume_path = f"{user.id}/resume.{resume_extension}"
             upload_resume(token, resume_path, resume_bytes, resume.mimetype)
             resume_metadata = {
@@ -74,6 +127,7 @@ def save_profile():
                 "resume_filename": resume.filename,
                 "resume_mime_type": resume.mimetype,
                 "resume_size": len(resume_bytes),
+                "resume_text": resume_text,
             }
 
         profile = {"id": user.id, "name": name}
@@ -82,11 +136,14 @@ def save_profile():
         profile.update(resume_metadata)
         result = authenticated_supabase(token).table("profiles").upsert(profile).execute()
         saved_profile = result.data[0] if result.data else profile
+        saved_profile.pop("resume_text", None)
         if saved_profile.get("profile_picture_path"):
             saved_profile["profile_picture_url"] = get_avatar_url(
                 token, saved_profile["profile_picture_path"]
             )
         return jsonify({"profile": saved_profile})
+    except ResumeExtractionError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception:
         current_app.logger.exception("Profile update failed")
         return jsonify({"error": "Unable to update profile."}), 400

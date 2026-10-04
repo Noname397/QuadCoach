@@ -6,6 +6,7 @@ import {
   login as loginRequest,
   loginWithGoogle as loginWithGoogleRequest,
   logoutFromApi,
+  parseResume as parseResumeRequest,
   readStoredUser,
   signOutFromSupabase,
   signUp as signUpRequest,
@@ -29,10 +30,12 @@ export function AuthProvider({ children }) {
     retry: false,
   });
 
-  const user = authUser && currentUserQuery.data
-    ? { ...authUser, ...currentUserQuery.data.user, ...currentUserQuery.data }
-    : authUser;
-  const authLoading = loading || Boolean(authUser && currentUserQuery.isPending);
+  const user =
+    authUser && currentUserQuery.data
+      ? { ...authUser, ...currentUserQuery.data.user, ...currentUserQuery.data }
+      : authUser;
+  const authLoading =
+    loading || Boolean(authUser && currentUserQuery.isPending);
 
   useEffect(() => {
     if (!currentUserQuery.isError) return;
@@ -115,13 +118,24 @@ export function AuthProvider({ children }) {
       return updateProfileRequest(accessToken, form);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["current-user", accessToken] });
+      queryClient.invalidateQueries({
+        queryKey: ["current-user", accessToken],
+      });
     },
   });
 
   const updateProfile = useCallback(
-    (form) => updateProfileMutation.mutateAsync(form).then((data) => data.profile),
+    (form) =>
+      updateProfileMutation.mutateAsync(form).then((data) => data.profile),
     [updateProfileMutation],
+  );
+
+  const parseResume = useCallback(
+    (file) => {
+      if (!accessToken) throw new Error("You are not authenticated.");
+      return parseResumeRequest(accessToken, file);
+    },
+    [accessToken],
   );
 
   const logout = useCallback(async () => {
@@ -138,8 +152,27 @@ export function AuthProvider({ children }) {
   }, [accessToken, queryClient]);
 
   const value = useMemo(
-    () => ({ user, loading: authLoading, authLoading, login, signUp, loginWithGoogle, updateProfile, logout }),
-    [user, authLoading, login, signUp, loginWithGoogle, updateProfile, logout],
+    () => ({
+      user,
+      loading: authLoading,
+      authLoading,
+      login,
+      signUp,
+      loginWithGoogle,
+      updateProfile,
+      parseResume,
+      logout,
+    }),
+    [
+      user,
+      authLoading,
+      login,
+      signUp,
+      loginWithGoogle,
+      updateProfile,
+      parseResume,
+      logout,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

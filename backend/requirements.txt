@@ -3,3 +3,6 @@ cryptography
 python-dotenv
 Flask
 flask-cors
+PyMuPDF
+python-docx
+anthropic

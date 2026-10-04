@@ -82,6 +82,16 @@ export function updateProfile(accessToken, form) {
   });
 }
 
+export function parseResume(accessToken, file) {
+  const form = new FormData();
+  form.append("resume", file);
+  return request("/api/resume/parse", {
+    method: "POST",
+    headers: getAuthHeaders(accessToken),
+    body: form,
+  });
+}
+
 export function logoutFromApi(accessToken) {
   return request("/api/logout", {
     method: "POST",

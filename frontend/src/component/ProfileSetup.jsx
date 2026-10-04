@@ -4,12 +4,11 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 const RESUME_TYPES = [
   "application/pdf",
-  "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 ];
 
 export default function ProfileSetup({ editing = false, onCancel }) {
-  const { user, updateProfile, logout } = useAuth();
+  const { user, updateProfile, parseResume, logout } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: user.profile?.name || "",
@@ -17,35 +16,56 @@ export default function ProfileSetup({ editing = false, onCancel }) {
     resume: null,
   });
   const [loading, setLoading] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
+  const [resumePreview, setResumePreview] = useState(null);
 
-  const updateField = (event) => {
-    if (event.target.type !== "file") {
+  const updateField = async (event) => {
+    const input = event.target;
+    const fieldName = input.name;
+    if (input.type !== "file") {
       setForm((current) => ({
         ...current,
-        [event.target.name]: event.target.value,
+        [fieldName]: input.value,
       }));
       return;
     }
 
-    const file = event.target.files?.[0] || null;
+    const file = input.files?.[0] || null;
     if (
       file &&
-      ((event.target.name === "profile_picture" &&
+      ((fieldName === "profile_picture" &&
         !["image/jpeg", "image/png", "image/webp"].includes(file.type)) ||
-        (event.target.name === "resume" && !RESUME_TYPES.includes(file.type)) ||
+        (fieldName === "resume" && !RESUME_TYPES.includes(file.type)) ||
         file.size > 5 * 1024 * 1024)
     ) {
       setError(
-        event.target.name === "resume"
-          ? "Choose a PDF, DOC, or DOCX CV up to 5 MB."
+        fieldName === "resume"
+          ? "Choose a PDF or DOCX CV up to 5 MB."
           : "Choose a JPEG, PNG, or WebP image up to 5 MB.",
       );
-      event.target.value = "";
+      input.value = "";
       return;
     }
     setError("");
-    setForm((current) => ({ ...current, [event.target.name]: file }));
+    setForm((current) => ({ ...current, [fieldName]: file }));
+
+    if (fieldName !== "resume") return;
+    setResumePreview(null);
+    if (!file) return;
+
+    setParsing(true);
+    try {
+      const parsedResume = await parseResume(file);
+      console.log("Resume extraction result:", parsedResume);
+      setResumePreview(parsedResume);
+    } catch (parseError) {
+      setError(parseError.message);
+      setForm((current) => ({ ...current, resume: null }));
+      input.value = "";
+    } finally {
+      setParsing(false);
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -103,16 +123,20 @@ export default function ProfileSetup({ editing = false, onCancel }) {
             <span className="mb-1 block text-sm font-medium text-gray-700">
               CV / resume{" "}
               <span className="font-normal text-gray-400">
-                (optional, PDF, DOC, or DOCX)
+                (optional, PDF or DOCX)
               </span>
             </span>
             <input
               name="resume"
               type="file"
-              accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              disabled={parsing}
               onChange={updateField}
               className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
+            {parsing && (
+              <p className="mt-1 text-sm text-gray-500">Parsing resume...</p>
+            )}
             {user.profile?.resume_filename && !form.resume && (
               <p className="mt-1 text-xs text-gray-500">
                 Current CV: {user.profile.resume_filename}
@@ -166,17 +190,187 @@ export default function ProfileSetup({ editing = false, onCancel }) {
           </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || parsing}
             className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {loading
-              ? "Saving..."
+            {loading || parsing
+              ? parsing
+                ? "Parsing..."
+                : "Saving..."
               : editing
                 ? "Save changes"
                 : "Continue to QuadCoach"}
           </button>
         </div>
       </form>
+
+      {resumePreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/50 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resume-preview-title"
+            className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-6 py-5">
+              <div>
+                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-green-700">
+                  Resume analysis
+                </p>
+                <h3
+                  id="resume-preview-title"
+                  className="text-xl font-semibold text-gray-900"
+                >
+                  Resume details
+                </h3>
+                <p className="mt-1 text-sm text-gray-600">
+                  Review the details extracted from your CV.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResumePreview(null)}
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              >
+                Close
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="mb-3 text-sm font-medium text-gray-700">
+                Selected file: {resumePreview.filename}
+              </p>
+              <div className="max-h-[55vh] space-y-5 overflow-auto pr-1">
+                {resumePreview.details.headline && (
+                  <p className="text-lg font-semibold text-gray-900">
+                    {resumePreview.details.headline}
+                  </p>
+                )}
+                <ResumeSection
+                  title="Contact"
+                  bullets={[
+                    resumePreview.details.contact.name,
+                    resumePreview.details.contact.email,
+                    resumePreview.details.contact.phone,
+                    resumePreview.details.contact.location,
+                  ].filter(Boolean)}
+                />
+                {resumePreview.details.summary && (
+                  <ResumeSection
+                    title="Summary"
+                    bullets={[resumePreview.details.summary]}
+                  />
+                )}
+                <ResumeSection
+                  title="Skills"
+                  bullets={resumePreview.details.skills}
+                />
+                {resumePreview.details.experience.length > 0 && (
+                  <section>
+                    <h4 className="mb-2 text-sm font-semibold text-gray-900">
+                      Experience
+                    </h4>
+                    <div className="space-y-4">
+                      {resumePreview.details.experience.map((role, index) => (
+                        <div key={`${role.company}-${role.title}-${index}`}>
+                          <p className="font-medium text-gray-800">
+                            {[role.title, role.company]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {[role.location, role.start_date, role.end_date]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </p>
+                          <BulletList items={role.bullets} />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                {resumePreview.details.education.length > 0 && (
+                  <ResumeSection
+                    title="Education"
+                    bullets={resumePreview.details.education.map((item) =>
+                      [
+                        item.degree,
+                        item.field,
+                        item.institution,
+                        item.start_date,
+                        item.end_date,
+                      ]
+                        .filter(Boolean)
+                        .join(" · "),
+                    )}
+                  />
+                )}
+                {resumePreview.details.projects.length > 0 && (
+                  <section>
+                    <h4 className="mb-2 text-sm font-semibold text-gray-900">
+                      Projects
+                    </h4>
+                    <div className="space-y-3">
+                      {resumePreview.details.projects.map((project, index) => (
+                        <div key={`${project.name}-${index}`}>
+                          <p className="font-medium text-gray-800">
+                            {project.name}
+                          </p>
+                          {project.description && (
+                            <p className="text-sm text-gray-600">
+                              {project.description}
+                            </p>
+                          )}
+                          <BulletList items={project.bullets} />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+                <ResumeSection
+                  title="Certifications"
+                  bullets={resumePreview.details.certifications}
+                />
+                <ResumeSection
+                  title="Languages"
+                  bullets={resumePreview.details.languages}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-gray-200 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setResumePreview(null)}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Done
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
+  );
+}
+
+function ResumeSection({ title, bullets }) {
+  if (!bullets.length) return null;
+
+  return (
+    <section>
+      <h4 className="mb-2 text-sm font-semibold text-gray-900">{title}</h4>
+      <BulletList items={bullets} />
+    </section>
+  );
+}
+
+function BulletList({ items }) {
+  if (!items.length) return null;
+
+  return (
+    <ul className="list-disc space-y-1 pl-5 text-sm leading-6 text-gray-700">
+      {items.map((item, index) => (
+        <li key={`${item}-${index}`}>{item}</li>
+      ))}
+    </ul>
   );
 }

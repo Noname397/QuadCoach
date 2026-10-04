@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { request } from "./authApi";
+import { parseResume, request } from "./authApi";
 
 function response({ ok, status, contentType, data }) {
   return {
@@ -71,5 +71,39 @@ describe("request", () => {
     await expect(request("/api/me")).rejects.toThrow(
       "Unable to connect to the server.",
     );
+  });
+});
+
+describe("parseResume", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts the selected file with bearer auth as multipart form data", async () => {
+    const resume = new File(["resume text"], "resume.pdf", {
+      type: "application/pdf",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response({
+          ok: true,
+          status: 200,
+          contentType: "application/json",
+          data: { filename: "resume.pdf", text: "Resume text" },
+        }),
+      ),
+    );
+
+    await expect(parseResume("test-token", resume)).resolves.toEqual({
+      filename: "resume.pdf",
+      text: "Resume text",
+    });
+
+    const [url, options] = fetch.mock.calls[0];
+    expect(url).toContain("/api/resume/parse");
+    expect(options.method).toBe("POST");
+    expect(options.headers).toEqual({ Authorization: "Bearer test-token" });
+    expect(options.body.get("resume")).toBe(resume);
   });
 });
