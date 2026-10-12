@@ -66,6 +66,15 @@ export default function App() {
                   />
                 }
               />
+              <Route
+                path="/behavioral-practice"
+                element={
+                  <Dashboard
+                    menuOpen={menuOpen}
+                    onMenuClose={() => setMenuOpen(false)}
+                  />
+                }
+              />
               <Route path="*" element={<Navigate to="/profile" replace />} />
             </Routes>
           ) : (

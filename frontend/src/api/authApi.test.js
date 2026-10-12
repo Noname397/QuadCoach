@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseResume, request } from "./authApi";
+import {
+  parseResume,
+  request,
+  requestBehavioralFeedback,
+} from "./authApi";
 
 function response({ ok, status, contentType, data }) {
   return {
@@ -105,5 +109,42 @@ describe("parseResume", () => {
     expect(options.method).toBe("POST");
     expect(options.headers).toEqual({ Authorization: "Bearer test-token" });
     expect(options.body.get("resume")).toBe(resume);
+  });
+});
+
+describe("requestBehavioralFeedback", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts the answer with bearer auth and returns feedback sources", async () => {
+    const result = {
+      feedback: "Make your action more specific.",
+      sources: [{ title: "STAR Method", section: "Action", score: 0.82 }],
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        response({
+          ok: true,
+          status: 200,
+          contentType: "application/json",
+          data: result,
+        }),
+      ),
+    );
+
+    await expect(
+      requestBehavioralFeedback("test-token", "I fixed a difficult bug."),
+    ).resolves.toEqual(result);
+
+    const [url, options] = fetch.mock.calls[0];
+    expect(url).toContain("/api/feedback/behavioral");
+    expect(options.method).toBe("POST");
+    expect(options.headers).toHaveProperty("Authorization");
+    expect(options.headers).toHaveProperty("Content-Type", "application/json");
+    expect(JSON.parse(options.body)).toEqual({
+      answer: "I fixed a difficult bug.",
+    });
   });
 });

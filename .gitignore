@@ -1,3 +1,4 @@
 .env
 __pycache__/
 supabase/.temp/
+backend/data/coaching_index.json

@@ -92,6 +92,17 @@ export function parseResume(accessToken, file) {
   });
 }
 
+export function requestBehavioralFeedback(accessToken, answer) {
+  return request("/api/feedback/behavioral", {
+    method: "POST",
+    headers: {
+      ...getAuthHeaders(accessToken),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ answer }),
+  });
+}
+
 export function logoutFromApi(accessToken) {
   return request("/api/logout", {
     method: "POST",

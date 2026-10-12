@@ -6,3 +6,4 @@ flask-cors
 PyMuPDF
 python-docx
 anthropic
+fastembed>=0.7,<1

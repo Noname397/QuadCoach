@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext.jsx";
 
 const navigationItems = [
   { id: "profile", label: "Profile" },
+  { id: "behavioral-practice", label: "Practice" },
   { id: "chats", label: "Chats" },
 ];
 
@@ -81,7 +82,7 @@ export default function Sidebar({ isOpen, onClose }) {
                       d="M5.5 19c.8-3.1 3.1-4.75 6.5-4.75s5.7 1.65 6.5 4.75"
                     />
                   </svg>
-                ) : (
+                ) : item.id === "chats" ? (
                   <svg
                     viewBox="0 0 24 24"
                     fill="none"
@@ -94,6 +95,21 @@ export default function Sidebar({ isOpen, onClose }) {
                       strokeLinejoin="round"
                       d="M5.5 6.5h13a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-7l-4.5 3v-3h-1.5a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2Z"
                     />
+                  </svg>
+                ) : (
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    className="h-5 w-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12m-8.48 8.48-2.12 2.12"
+                    />
+                    <circle cx="12" cy="12" r="5" />
                   </svg>
                 )}
               </span>

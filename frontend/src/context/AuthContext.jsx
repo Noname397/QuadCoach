@@ -7,6 +7,7 @@ import {
   loginWithGoogle as loginWithGoogleRequest,
   logoutFromApi,
   parseResume as parseResumeRequest,
+  requestBehavioralFeedback as requestBehavioralFeedbackRequest,
   readStoredUser,
   signOutFromSupabase,
   signUp as signUpRequest,
@@ -138,6 +139,14 @@ export function AuthProvider({ children }) {
     [accessToken],
   );
 
+  const requestBehavioralFeedback = useCallback(
+    (answer) => {
+      if (!accessToken) throw new Error("You are not authenticated.");
+      return requestBehavioralFeedbackRequest(accessToken, answer);
+    },
+    [accessToken],
+  );
+
   const logout = useCallback(async () => {
     try {
       if (accessToken) {
@@ -161,6 +170,7 @@ export function AuthProvider({ children }) {
       loginWithGoogle,
       updateProfile,
       parseResume,
+      requestBehavioralFeedback,
       logout,
     }),
     [
@@ -171,6 +181,7 @@ export function AuthProvider({ children }) {
       loginWithGoogle,
       updateProfile,
       parseResume,
+      requestBehavioralFeedback,
       logout,
     ],
   );

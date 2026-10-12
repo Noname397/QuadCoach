@@ -3,6 +3,7 @@ from flask_cors import CORS
 
 from config import FRONTEND_URL
 from routes.auth import auth_bp
+from routes.feedback import feedback_bp
 from routes.health import health_bp
 from routes.profile import profile_bp
 
@@ -20,6 +21,7 @@ def create_app():
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(feedback_bp)
     app.register_blueprint(profile_bp)
     return app
 
